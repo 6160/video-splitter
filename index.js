@@ -1,8 +1,10 @@
-const fs = require('fs');
 const { program } = require('commander');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const { initLogger } = require('./lib/logger');
+const {
+    checkFolder, getConfig, createFolder, deleteFolder,
+} = require('./lib/utils');
 
 // ffmpeg examples:
 // ffmpeg -i source-file.foo -ss 0 -t 600 first-10-min.m4v
@@ -48,13 +50,11 @@ const executor = async (...commands) => {
 // fs functuion to load and parse json config
 const loadConfig = (filename) => {
     logger.info('### loadconfig');
+    const config = getConfig(filename);
 
-    const configRaw = fs.readFileSync(`./${filename}`);
-    const configJSON = JSON.parse(configRaw);
+    logger.info(`>>> loaded: \n ${JSON.stringify(config, null, 2)}`);
 
-    logger.info(JSON.stringify(configJSON, null, 2));
-
-    return configJSON;
+    return config;
 };
 
 // given a chunk and a folder it returns a cmd for splitting
@@ -122,19 +122,6 @@ const createJobList = (project) => {
     return [...preJobs, ...jobList, ...postJobs];
 };
 
-// utility for checking nicely if folder exist
-const checkFolder = (folderName) => {
-    let isThere;
-
-    try {
-        isThere = fs.statSync(folderName);
-    } catch (e) {
-        isThere = false;
-    }
-
-    return isThere;
-};
-
 // this creates the project folder and data structures
 const prepareProject = (config) => {
     logger.info('### preparing project');
@@ -147,11 +134,11 @@ const prepareProject = (config) => {
 
     if (isThere) {
         logger.info('>>>> removing folder');
-        fs.rmdirSync(folderName, { recursive: true });
+        deleteFolder(folderName);
     }
 
     logger.info('>>> making folder');
-    fs.mkdirSync(`./${folderName}`);
+    createFolder(folderName);
 
     const project = {
         name: projectName,

@@ -1,0 +1,4 @@
+node_modules/*
+PRJ.*
+*.mp4
+test.json

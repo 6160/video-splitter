@@ -3,7 +3,7 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const { initLogger } = require('./lib/logger');
 const {
-    checkFolder, getConfig, createFolder, deleteFolder,
+    checkFolder, getConfig, createFolder, deleteFolder, writeFile,
 } = require('./lib/utils');
 
 // ffmpeg examples:
@@ -60,13 +60,33 @@ const loadConfig = (filename) => {
 // given a chunk and a folder it returns a cmd for splitting
 // a video file starting from a timestamp (in second) with a
 // specific duration
-const createFfmpegCmd = (chunk, folder) => {
+const ffmpegCut = (chunk, folder) => {
     logger.info('### create ffmpeg cmd');
 
     const durationParam = chunk.duration === -1 ? '' : `-t ${chunk.duration}`;
     const cmd = `ffmpeg -i ${chunk.inputName} -ss ${chunk.start} ${durationParam} -c copy ${folder}/${chunk.outputName}`;
 
     return cmd;
+};
+
+const ffmpegStitch = (vidList, output) => {
+    const cmd = `ffmpeg -f concat -safe 0 -i ${vidList} -c copy ${output}`;
+    return cmd;
+};
+
+const createVidList = (chunks, folder) => {
+    const vidList = chunks.map((chunk) => {
+        const path = `${chunk.outputName}`;
+        const entry = `file '${path}'`;
+        return entry;
+    });
+
+    const vidListString = vidList.join('\n');
+    const fileName = `${folder}/vidlist.txt`;
+
+    writeFile(fileName, vidListString);
+
+    return fileName;
 };
 
 // enrich the chunks with service data
@@ -98,10 +118,13 @@ const createPreJobs = () => {
 };
 
 // use it to add cmds you want to execute at the end
-const createPostJobs = () => {
+const createPostJobs = (project) => {
     const cmds = [
     // array of commands
     ];
+
+    const stitchCmd = ffmpegStitch(project.vidList, project.output);
+    cmds.push(stitchCmd);
 
     return cmds;
 };
@@ -111,11 +134,11 @@ const createJobList = (project) => {
     logger.info('### create job list');
 
     const { chunks, folder } = project;
-    const preJobs = createPreJobs();
-    const postJobs = createPostJobs();
+    const preJobs = createPreJobs(project);
+    const postJobs = createPostJobs(project);
 
     const jobList = chunks.map((chunk) => {
-        const cmd = createFfmpegCmd(chunk, folder);
+        const cmd = ffmpegCut(chunk, folder);
         return cmd;
     });
 
@@ -139,11 +162,14 @@ const prepareProject = (config) => {
 
     logger.info('>>> making folder');
     createFolder(folderName);
-
+    const vidList = createVidList(config, folderName);
+    logger.err(vidList);
     const project = {
         name: projectName,
         folder: folderName,
+        output: `${folderName}/${projectName}.mp4`,
         chunks: config,
+        vidList,
     };
 
     return project;

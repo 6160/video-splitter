@@ -3,7 +3,7 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const { initLogger } = require('./lib/logger');
 const {
-    checkFolder, getConfig, createFolder, deleteFolder, writeFile,
+    checkFolder, getConfig, createFolder, deleteFolder, writeFile, shuffle,
 } = require('./lib/utils');
 
 // ffmpeg examples:
@@ -41,17 +41,43 @@ const executor = async (...commands) => {
     const { stderr } = await execAsync(cmd);
 
     if (stderr) {
-        logger.err(stderr);
+        // commented cause it seems that ffmpeg use stderr
+        // for outputting logs, weird
+        // logger.err(stderr);
     }
 
     return executor(...commands);
 };
 
+// enrich the chunks with service data
+const parseConfig = (configRaw) => {
+    logger.info('### parseconfig');
+
+    const parsedChunks = configRaw.chunks.map((chunk, index) => {
+        if (!chunk.keep) return false;
+
+        const parsedChunk = {
+            ...chunk,
+            inputName: options.input,
+            outputName: `${options.output}_${index}.mp4`,
+        };
+
+        return parsedChunk;
+    });
+
+    const config = {
+        type: configRaw.type,
+        chunks: parsedChunks.filter((el) => !!el),
+    };
+
+    return config;
+};
+
 // fs functuion to load and parse json config
 const loadConfig = (filename) => {
     logger.info('### loadconfig');
-    const config = getConfig(filename);
 
+    const config = getConfig(filename);
     logger.info(`>>> loaded: \n ${JSON.stringify(config, null, 2)}`);
 
     return config;
@@ -74,38 +100,24 @@ const ffmpegStitch = (vidList, output) => {
     return cmd;
 };
 
-const createVidList = (chunks, folder) => {
-    const vidList = chunks.map((chunk) => {
+// creates a txt file with a list of splitted videos
+// to use with ffmpeg stitch cmd
+const createVidList = (config, folder) => {
+    const vidList = config.chunks.map((chunk) => {
         const path = `${chunk.outputName}`;
         const entry = `file '${path}'`;
         return entry;
     });
 
+    if (config.type === 'shuffle') {
+        shuffle(vidList);
+    }
     const vidListString = vidList.join('\n');
     const fileName = `${folder}/vidlist.txt`;
 
     writeFile(fileName, vidListString);
 
     return fileName;
-};
-
-// enrich the chunks with service data
-const parseConfig = (config) => {
-    logger.info('### parseconfig');
-
-    const parsed = config.map((chunk, index) => {
-        if (!chunk.keep) return false;
-
-        const parsedChunk = {
-            ...chunk,
-            inputName: options.input,
-            outputName: `${options.output}_${index}.mp4`,
-        };
-
-        return parsedChunk;
-    });
-
-    return parsed.filter((el) => !!el);
 };
 
 // use it to add cmds you want to execute first
@@ -162,13 +174,15 @@ const prepareProject = (config) => {
 
     logger.info('>>> making folder');
     createFolder(folderName);
+
     const vidList = createVidList(config, folderName);
-    logger.err(vidList);
+
     const project = {
         name: projectName,
         folder: folderName,
         output: `${folderName}/${projectName}.mp4`,
-        chunks: config,
+        type: config.type,
+        chunks: config.chunks,
         vidList,
     };
 

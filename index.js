@@ -64,7 +64,7 @@ const createFfmpegCmd = (chunk, folder) => {
     logger.info('### create ffmpeg cmd');
 
     const durationParam = chunk.duration === -1 ? '' : `-t ${chunk.duration}`;
-    const cmd = `ffmpeg -i ${chunk.inputName}.mp4 -ss ${chunk.start} ${durationParam} -c copy ${folder}/${chunk.outputName}`;
+    const cmd = `ffmpeg -i ${chunk.inputName} -ss ${chunk.start} ${durationParam} -c copy ${folder}/${chunk.outputName}`;
 
     return cmd;
 };
@@ -79,7 +79,7 @@ const parseConfig = (config) => {
         const parsedChunk = {
             ...chunk,
             inputName: options.input,
-            outputName: `${options.input}_${index}.mp4`,
+            outputName: `${options.output}_${index}.mp4`,
         };
 
         return parsedChunk;
@@ -139,7 +139,7 @@ const checkFolder = (folderName) => {
 const prepareProject = (config) => {
     logger.info('### preparing project');
 
-    const projectName = options.input;
+    const projectName = options.output;
     const folderName = `./PRJ.${projectName}`;
 
     logger.info('>>> check if folder exist');
